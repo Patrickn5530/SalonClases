@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Escolar - Colectas</title>
+
+  <!-- CSS locales -->
+  <link href="css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/fontawesome-all.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/introjs.min.css" />
+
+  <style>
+    .tabla-scroll { overflow-x: auto; }
+    .pago-completo { background-color: #d4edda !important; }
+    .pago-parcial { background-color: #fff3cd !important; }
+    /* pequeño ajuste para que el footer no tape contenido cuando hay fixed-top */
+    main { padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <header class="fixed-top">
+    <img src="img/logoEdoMex2.jpg" class="h-100" style="object-fit: cover; max-width: 150px;" />
+    <div class="dropdown text-white">
+      <button class="btn btn-outline-secondary dropdown-toggle text-white" type="button" data-bs-toggle="dropdown">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="index.html">Lista</a></li>
+        <li><a class="dropdown-item bg-secondary text-white" href="colectas.html">Colecta</a></li>
+        <li><a class="dropdown-item" href="desayunos.html">Desayunos</a></li>
+        <li><a class="dropdown-item" href="historial.html">Historial</a></li>
+        <li><a class="dropdown-item" href="configurar.html">Configurar</a></li>
+        <li><hr class="dropdown-divider" /></li>
+        <li><button class="dropdown-item text-primary" id="verGuia">Ver guía</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="row mb-2">
+      <div class="col-12 d-flex justify-content-between align-items-center">
+        <h5 class="text-truncate text-white mb-0">Lista de Colectas</h5>
+        <button id="crearColectaBtn" class="btn btn-primary btn-sm p-1">Crear Colecta</button>
+      </div>
+    </div>
+    <div class="row mb-3">
+      <div class="col-12 col-md-6">
+        <select id="colectaSelect" class="form-select"><option value="">Seleccionar</option></select>
+      </div>
+    </div>
+    <div id="tablaColecta" class="row text-white"></div>
+    <br><br>
+  </main>
+
+  <footer class="container-fluid text-center text-white mt-4" style="font-size: 0.8em;">
+    <p id="infoDocente">Cargando datos del docente...</p>
+  </footer>
+
+  <!-- JS locales (cargar al final) -->
+  <script src="js/bootstrap.bundle.min.js"></script>
+  <script src="js/sweetalert2.min.js"></script>
+  <script src="js/localforage.min.js"></script>
+  <script src="js/intro.min.js"></script>
+
+<script>
+  // --- UTIL ---
+  function formatearFecha(fecha) { return fecha ? fecha.split('-').reverse().join('-') : ''; }
+
+  function labelsTour() {
+    return {
+      nextLabel: 'Siguiente',
+      prevLabel: 'Anterior',
+      doneLabel: 'Finalizar',
+      skipLabel: 'Omitir',
+      showProgress: true,
+      exitOnOverlayClick: false,
+      exitOnEsc: false
+    };
+  }
+
+  // --- FOOTER ---
+  async function actualizarFooter() {
+    const info = document.getElementById('infoDocente');
+    try {
+      const datos = await localforage.getItem('configuracionDocente');
+      if (datos && datos.nombre && datos.grado && datos.grupo && datos.tratamiento) {
+        info.textContent = `${datos.tratamiento}: ${datos.nombre} - ${datos.grado}° Grupo: ${datos.grupo}`;
+      } else {
+        info.textContent = 'Sin configuración de docente';
+      }
+    } catch (e) {
+      info.textContent = 'Error al cargar información del docente';
+    }
+  }
+
+  // --- CREAR COLECTA (botón) ---
+  document.getElementById('crearColectaBtn').addEventListener('click', () => {
+    Swal.fire({
+      icon: 'info', title: '¡Aviso!',
+      text: 'Una vez creada la colecta, el título no podrá cambiarse.',
+      confirmButtonText: 'Entendido'
+    }).then(() => {
+      Swal.fire({
+        title: 'Crear Colecta',
+        html: `
+          <input id="tituloColecta" class="swal2-input" placeholder="Título de la colecta">
+          <input id="montoColecta" type="number" class="swal2-input" placeholder="Monto a colectar">
+          <input id="fechaInicio" type="date" class="swal2-input" value="${new Date().toISOString().slice(0,10)}">
+          <input id="fechaLimite" type="date" class="swal2-input" value="${new Date().toISOString().slice(0,10)}">
+        `,
+        preConfirm: () => {
+          const titulo = document.getElementById('tituloColecta').value.trim();
+          const monto = parseFloat(document.getElementById('montoColecta').value);
+          const f1 = document.getElementById('fechaInicio').value;
+          const f2 = document.getElementById('fechaLimite').value;
+          if (!titulo || isNaN(monto) || !f1 || !f2) {
+            Swal.showValidationMessage('Completa todos los campos'); return false;
+          }
+          return { titulo, monto, f1, f2 };
+        },
+        showCancelButton: true,
+        cancelButtonText: 'Cancelar',
+        confirmButtonText: 'Crear'
+      }).then(async res => {
+        if (!res.isConfirmed) return;
+        const { titulo, monto, f1, f2 } = res.value;
+        const alumnos = await localforage.getItem('alumnos') || [];
+        if (!alumnos.length) {
+          Swal.fire('Error', 'No hay alumnos registrados en la lista general.', 'error');
+          return;
+        }
+        const colecta = { titulo, monto, fechaInicio: f1, fechaLimite: f2, alumnos: alumnos.map(a => ({ ...a, entregado: 0 })) };
+        await localforage.setItem(titulo, colecta);
+        Swal.fire('Colecta creada!', '', 'success');
+        await cargarColectas();
+        document.getElementById('colectaSelect').value = titulo;
+        mostrarColectaSeleccionada();
+      });
+    });
+  });
+
+  // --- CARGAR SELECT ---
+  async function cargarColectas() {
+    const keys = await localforage.keys();
+    const sel = document.getElementById('colectaSelect');
+    sel.innerHTML = '<option value="">Seleccionar</option>';
+    for (const k of keys) {
+      if (['alumnos', 'configuracionDocente', 'cicloEscolar'].includes(k)) continue;
+      const c = await localforage.getItem(k);
+      if (c?.titulo) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = `${c.titulo} — ${formatearFecha(c.fechaInicio)} a ${formatearFecha(c.fechaLimite)}`;
+        sel.appendChild(opt);
+      }
+    }
+  }
+
+  // --- MOSTRAR COLECTA Y ENLAZAR EVENTOS ---
+  document.getElementById('colectaSelect').addEventListener('change', mostrarColectaSeleccionada);
+  async function mostrarColectaSeleccionada() {
+    const key = document.getElementById('colectaSelect').value;
+    const cont = document.getElementById('tablaColecta');
+    cont.innerHTML = '';
+    if (!key) return;
+    const c = await localforage.getItem(key);
+    if (!c) return;
+
+    // construir filas
+    let total = 0;
+    const filas = (c.alumnos || []).map((a, i) => {
+      const ent = Number(a.entregado || 0);
+      total += ent;
+      const restante = (c.monto - ent).toFixed(2);
+      const clase = ent >= c.monto ? 'pago-completo' : (ent > 0 ? 'pago-parcial' : '');
+      // Quitar botón (separa columna) y abonar
+      return `<tr class="${clase}">
+        <td style="width:50px">${i + 1}</td>
+        <td class="text-truncate">${a.apellidoPaterno} ${a.apellidoMaterno} ${a.nombre}</td>
+        <td class="text-end">${ent.toFixed(2)}</td>
+        <td class="text-end">${restante}</td>
+        <td class="text-center"><button class="btn btn-sm btn-success abonar-btn" style="font-size:0.8em;" data-i="${i}">Abonar</button></td>
+        <td class="text-center"><button class="btn btn-sm btn-danger quitar-btn" style="font-size:0.8em;" data-i="${i}"><i class="fas fa-trash-alt"></i></button></td>
+      </tr>`;
+    }).join('');
+
+    cont.innerHTML = `
+      <div class="mb-3 d-flex justify-content-between align-items-start">
+        <div>
+          <h4 class="mb-0">${c.titulo}</h4>
+          <small>Inicio: ${formatearFecha(c.fechaInicio)} | Límite: ${formatearFecha(c.fechaLimite)}</small>
+        </div>
+        <div class="btn-group">
+          <button id="agregarAlumnoBtn" class="btn btn-success btn-sm" title="Agregar Alumno"><i class="fas fa-plus-circle"></i></button>
+          <button id="editarColectaBtn" class="btn btn-primary btn-sm" title="Editar colecta"><i class="fas fa-edit"></i></button>
+          <button id="borrarColectaBtn" class="btn btn-danger btn-sm" title="Eliminar colecta"><i class="fas fa-trash-alt"></i></button>
+        </div>
+      </div>
+      <div class="tabla-scroll">
+        <table id="tablaAlumnosColecta" class="table table-striped">
+          <thead>
+            <tr><th>#</th><th>Alumno</th><th class="text-end">Entregado</th><th class="text-end">Restante</th><th class="text-center">Abonar</th><th class="text-center">Quitar</th></tr>
+          </thead>
+          <tbody>${filas}</tbody>
+          <tfoot>
+            <tr><td colspan="6"><strong>Meta: $${(c.monto * (c.alumnos?.length || 0)).toFixed(2)}</strong> &nbsp; | &nbsp; <strong class="text-success">Total Recaudado: $${total.toFixed(2)}</strong> &nbsp; | &nbsp; <strong class="text-danger">Faltante: $${(c.monto * (c.alumnos?.length || 0) - total).toFixed(2)}</strong></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+
+    // --- listeners ---
+    // Editar colecta
+    const editarBtn = document.getElementById('editarColectaBtn');
+    if (editarBtn) {
+      editarBtn.onclick = async () => {
+        Swal.fire({
+          title: 'Editar Colecta',
+          html: `
+            <p><strong>Título:</strong> ${c.titulo}</p>
+            <input id="fechaInicioEdit" type="date" class="swal2-input" value="${c.fechaInicio}">
+            <input id="fechaLimiteEdit" type="date" class="swal2-input" value="${c.fechaLimite}">
+            <input id="montoEdit" type="number" class="swal2-input" value="${c.monto}">
+          `,
+          preConfirm: () => {
+            const f1 = document.getElementById('fechaInicioEdit').value;
+            const f2 = document.getElementById('fechaLimiteEdit').value;
+            const m = parseFloat(document.getElementById('montoEdit').value);
+            if (!f1 || !f2 || isNaN(m)) { Swal.showValidationMessage('Todos los campos deben ser válidos'); return false; }
+            return { f1, f2, m };
+          },
+          showCancelButton: true,
+          cancelButtonText: 'Cancelar',
+        }).then(async (res) => {
+          if (!res.isConfirmed) return;
+          c.fechaInicio = res.value.f1;
+          c.fechaLimite = res.value.f2;
+          c.monto = res.value.m;
+          await localforage.setItem(key, c);
+          mostrarColectaSeleccionada();
+          Swal.fire('Colecta actualizada','', 'success');
+        });
+      };
+    }
+
+    // Borrar colecta
+    const borrarBtn = document.getElementById('borrarColectaBtn');
+    if (borrarBtn) {
+      borrarBtn.onclick = () => {
+        Swal.fire({
+          title: '¿Estás seguro?',
+          text: "Esta acción eliminará la colecta permanentemente.",
+          icon: 'warning',
+          showCancelButton: true,
+          cancelButtonText: 'Cancelar',
+          confirmButtonText: 'Sí, borrar'
+        }).then(async (r) => {
+          if (!r.isConfirmed) return;
+          await localforage.removeItem(key);
+          document.getElementById('tablaColecta').innerHTML = '';
+          await cargarColectas();
+          Swal.fire('Colecta eliminada','', 'success');
+        });
+      };
+    }
+
+    // Abonar
+    cont.querySelectorAll('.abonar-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.getAttribute('data-i'));
+        const { value } = await Swal.fire({
+          title: 'Registrar abono',
+          input: 'number',
+          inputPlaceholder: 'Cantidad a abonar',
+          showCancelButton: true,
+          cancelButtonText: 'Cancelar',
+          confirmButtonText: 'Registrar',
+        });
+        if (value === undefined) return; // cancelado
+        const abono = parseFloat(value);
+        if (isNaN(abono) || abono <= 0) {
+          Swal.fire('Cantidad inválida','', 'error'); return;
+        }
+        c.alumnos[idx].entregado = (Number(c.alumnos[idx].entregado) || 0) + abono;
+        await localforage.setItem(key, c);
+        mostrarColectaSeleccionada();
+        Swal.fire('Abono registrado','', 'success');
+      });
+    });
+
+    // Quitar alumno (solo de esa colecta)
+    cont.querySelectorAll('.quitar-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.getAttribute('data-i'));
+        Swal.fire({
+          title: '¿Quitar alumno?',
+          text: 'Se eliminará de esta colecta.',
+          icon: 'warning',
+          showCancelButton: true,
+          cancelButtonText: 'Cancelar',
+          confirmButtonText: 'Sí, quitar'
+        }).then(async (r) => {
+          if (!r.isConfirmed) return;
+          c.alumnos.splice(idx, 1);
+          await localforage.setItem(key, c);
+          mostrarColectaSeleccionada();
+          Swal.fire('Alumno quitado de la colecta','', 'success');
+        });
+      });
+    });
+
+    // Agregar alumno existente desde lista general
+    const agregarBtn = document.getElementById('agregarAlumnoBtn');
+    if (agregarBtn) {
+      agregarBtn.onclick = async () => {
+        const alumnosGenerales = await localforage.getItem('alumnos') || [];
+        if (!alumnosGenerales || alumnosGenerales.length === 0) {
+          Swal.fire('No hay alumnos disponibles en la lista general.', '', 'info'); return;
+        }
+        const disponibles = alumnosGenerales.filter(ag =>
+          !c.alumnos.some(ac =>
+            ac.nombre === ag.nombre &&
+            ac.apellidoPaterno === ag.apellidoPaterno &&
+            ac.apellidoMaterno === ag.apellidoMaterno
+          )
+        );
+        if (disponibles.length === 0) {
+          Swal.fire('Todos los alumnos ya están incluidos en esta colecta.', '', 'info'); return;
+        }
+        const opciones = disponibles.map((a, i) => `<option value="${i}">${a.apellidoPaterno} ${a.apellidoMaterno} ${a.nombre}</option>`).join('');
+        const { isConfirmed } = await Swal.fire({
+          title: 'Agregar Alumno a la Colecta',
+          html: `<select id="selectAlumno" class="swal2-input">${opciones}</select>`,
+          showCancelButton: true,
+          cancelButtonText: 'Cancelar',
+          confirmButtonText: 'Agregar'
+        });
+        if (!isConfirmed) return;
+        const idxSel = Number(document.getElementById('selectAlumno').value);
+        const alumnoSeleccionado = { ...disponibles[idxSel], entregado: 0 };
+        c.alumnos.push(alumnoSeleccionado);
+        await localforage.setItem(key, c);
+        mostrarColectaSeleccionada();
+        Swal.fire('Alumno agregado a la colecta','', 'success');
+      };
+    }
+  }
+
+  // --- TOUR ---
+  async function iniciarTourInicial() {
+    const keys = await localforage.keys();
+    const colectas = keys.filter(k => !['alumnos','configuracionDocente','cicloEscolar'].includes(k));
+    if (colectas.length) { iniciarTourManual(); return; }
+
+    // Bienvenida + crear demo (si no hay alumnos, crear demo alumno primero)
+    await Swal.fire({
+      title: '¡Bienvenido!',
+      html: 'Crearemos una <b>Colecta Demo</b> para mostrar cómo funciona esta sección. Se eliminará al terminar el recorrido.',
+      icon: 'info',
+      confirmButtonText: 'Entendido',
+      allowOutsideClick: false
+    });
+
+    let alumnos = await localforage.getItem('alumnos') || [];
+
+    // Si no hay alumnos, crear alumno demo (marcado con __demo:true)
+    let demoAlumnoCreado = false;
+    if (!alumnos.length) {
+      const demoAlumno = { apellidoPaterno: 'Pérez', apellidoMaterno: 'García', nombre: 'Juan', __demo: true };
+      alumnos = [demoAlumno];
+      await localforage.setItem('alumnos', alumnos);
+      demoAlumnoCreado = true;
+    }
+
+    // Crear colecta demo
+    const demoKey = 'Colecta Demo';
+    const demo = {
+      titulo: demoKey,
+      monto: 50,
+      fechaInicio: new Date().toISOString().slice(0,10),
+      fechaLimite: new Date().toISOString().slice(0,10),
+      alumnos: alumnos.map(a => ({ ...a, entregado: 0 }))
+    };
+
+    await localforage.setItem(demoKey, demo);
+    await cargarColectas();
+    document.getElementById('colectaSelect').value = demoKey;
+    mostrarColectaSeleccionada();
+    setTimeout(() => continuarTour(demoKey, true), 700);
+  }
+
+  async function iniciarTourManual() {
+    const keys = await localforage.keys();
+    const colectas = keys.filter(k => !['alumnos','configuracionDocente','cicloEscolar'].includes(k));
+    // Si no hay colectas, creamos demo (pero si no hay alumnos, creamos demo alumno también)
+    if (!colectas.length) {
+      let alumnos = await localforage.getItem('alumnos') || [];
+      let demoAlumnoCreado = false;
+      if (!alumnos.length) {
+        const demoAlumno = { apellidoPaterno: 'Pérez', apellidoMaterno: 'García', nombre: 'Juan', __demo: true };
+        alumnos = [demoAlumno];
+        await localforage.setItem('alumnos', alumnos);
+        demoAlumnoCreado = true;
+      }
+      const demoKey = 'Colecta Demo';
+      const demo = {
+        titulo: demoKey,
+        monto: 50,
+        fechaInicio: new Date().toISOString().slice(0,10),
+        fechaLimite: new Date().toISOString().slice(0,10),
+        alumnos: alumnos.map(a => ({ ...a, entregado: 0 }))
+      };
+      await localforage.setItem(demoKey, demo);
+      await cargarColectas();
+      document.getElementById('colectaSelect').value = demoKey;
+      mostrarColectaSeleccionada();
+      setTimeout(() => continuarTour(demoKey, true), 700);
+      return;
+    }
+    // si hay colectas, usar la primera
+    document.getElementById('colectaSelect').value = colectas[0];
+    mostrarColectaSeleccionada();
+    setTimeout(() => continuarTour(colectas[0], false), 600);
+  }
+
+  function continuarTour(key, isDemo) {
+    const pasos = [
+      { element: '#crearColectaBtn', intro: "Aquí puedes crear una nueva colecta." },
+      { element: '#colectaSelect', intro: "Con este selector eliges la colecta." },
+      { element: '#agregarAlumnoBtn', intro: "Con este botón puedes agregar alumnos desde la lista general. (si es que no están en la lista de la colecta)" },
+      { element: '#editarColectaBtn', intro: "Con este botón puedes editar fechas o monto de la colecta." },
+      { element: '#borrarColectaBtn', intro: "Con este botón puedes eliminar una colecta. (Esto no se puede deshacer)" },
+      { element: '#tablaAlumnosColecta tbody tr:first-child', intro: "Aquí se muestra la lista de alumnos, lo que han aportado y lo que les falta." },
+      { element: '.abonar-btn', intro: "Con este botón puedes agregar el dinero aportado." },
+      { element: '.fa-times', intro: "Con este botón puedes eliminar al alumno de la lista de esta colecta.<br>No se borrará de otras colectas o de la lista general." },
+      { element: '#infoDocente', intro: "Aquí se muestra la información del docente configurado." }
+    ];
+    const tour = introJs();
+    tour.setOptions({ steps: pasos, ...labelsTour() });
+    tour.oncomplete(async () => {
+      if (isDemo) {
+        // eliminar demo colecta
+        const demo = await localforage.getItem(key);
+        if (demo && demo.titulo === key) {
+          await localforage.removeItem(key);
+          await cargarColectas();
+          document.getElementById('tablaColecta').innerHTML = '';
+        }
+        // eliminar alumnos demo (los que tengan __demo: true)
+        let alumnos = await localforage.getItem('alumnos') || [];
+        const anyDemo = alumnos.some(a => a.__demo);
+        if (anyDemo) {
+          alumnos = alumnos.filter(a => !a.__demo);
+          await localforage.setItem('alumnos', alumnos);
+        }
+      }
+      preguntarContinuar();
+    });
+    tour.start();
+  }
+
+  function preguntarContinuar() {
+    Swal.fire({
+      title: '¿Continuar recorrido?',
+      text: '¿Quieres seguir con la siguiente sección (Desayunos)?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí',
+      cancelButtonText: 'No'
+    }).then((res) => {
+      if (res.isConfirmed) {
+        localStorage.setItem('tourContinuar', 'desayunos');
+        window.location.href = 'desayunos.html';
+      }
+    });
+  }
+
+  // --- INIT ---
+  document.addEventListener('DOMContentLoaded', async () => {
+    await actualizarFooter();
+    await cargarColectas();
+
+    document.getElementById('verGuia').addEventListener('click', iniciarTourManual);
+
+    // Si venimos desde el index con la intención de continuar el tour
+    if (localStorage.getItem('tourContinuar') === 'colectas') {
+      localStorage.removeItem('tourContinuar');
+      iniciarTourInicial();
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>App Escolar - Configurar</title>
+
+  <!-- CSS locales -->
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/fontawesome-all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/introjs.min.css">
+</head>
+<body>
+  <header class="fixed-top">
+    <img src="img/logoEdoMex2.jpg" alt="Gobierno del Estado de México" class="h-100" style="object-fit: cover; max-width: 150px;">
+    <div class="dropdown text-white">
+      <button class="btn btn-outline-secondary dropdown-toggle text-white" type="button" data-bs-toggle="dropdown">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="index.html">Lista</a></li>
+        <li><a class="dropdown-item" href="colectas.html">Colecta</a></li>
+        <li><a class="dropdown-item" href="desayunos.html">Desayunos</a></li>
+        <li><a class="dropdown-item" href="historial.html">Historial</a></li>
+        <li><a class="dropdown-item bg-secondary text-white" href="configurar.html">Configurar</a></li>
+        <li><button class="dropdown-item text-primary" id="verGuia">Ver guía</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="container my-3" style="padding-top:1rem;">
+    <h2 class="text-center text-white mb-4">Configuración</h2>
+
+    <div class="d-grid gap-3">
+      <button class="btn btn-primary" onclick="abrirConfigDocente()">
+        <i class="fas fa-user-cog"></i> Configurar Docente
+      </button>
+
+      <button class="btn btn-success" onclick="abrirConfigCiclo()">
+        <i class="fas fa-calendar-alt"></i> Ciclo Escolar
+      </button>
+
+      <button id="btnConfigPlantel" class="btn btn-warning text-white" onclick="abrirConfigPlantel()">
+        <i class="fas fa-school"></i> Configurar datos del plantel
+      </button>
+
+      <!-- Personal docente -->
+      <button id="btnPersonalDocente" class="btn btn-info text-white" onclick="abrirPersonalDocente()">
+        <i class="fas fa-users"></i> Personal docente
+      </button>
+
+      <button class="btn btn-danger" onclick="abrirReiniciarValores()">
+        <i class="fas fa-trash-alt"></i> Reiniciar Valores
+      </button>
+    </div>
+  </main>
+
+  <footer class="container-fluid text-center text-white mt-4" style="font-size:0.8em; background:#690202; padding:10px 0;">
+    <p id="footerConfig" style="margin:0.25rem 0;">
+      App desarrollada por Victor M. Patricio &copy; <span id="anioActual"></span> | V2.3.0
+    </p>
+    <p style="margin:0.25rem 0;">Proyecto escolar</p>
+    <p style="margin:0.25rem 0;">Contacto: <a href="mailto:patrickn5530@gmail.com" style="color:#0af;">patrickn5530@gmail.com</a></p>
+
+    <p style="margin:0.25rem 0;">
+      <!-- WhatsApp (Link directo) -->
+      <a href="https://wa.me/525621621880" target="_blank" rel="noopener" style="color:#25d366; margin:0 6px;">
+        <i class="fab fa-whatsapp"></i> WhatsApp
+      </a>
+    </p>
+  </footer>
+
+  <script>
+    // Año automático
+    document.getElementById('anioActual').textContent = new Date().getFullYear();
+  </script>
+
+  <!-- JS locales (ordenados, sin duplicados) -->
+  <script src="js/localforage.min.js"></script>
+  <script src="js/sweetalert2.min.js"></script>
+  <script src="js/intro.min.js"></script>
+  <script src="js/configurar.js"></script>
+  <script src="js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Si llegamos desde un tour anterior
+      if (localStorage.getItem('tourContinuar') === 'configurar') {
+        localStorage.removeItem('tourContinuar');
+        if (typeof iniciarTourConfigurar === 'function') iniciarTourConfigurar(true);
+        return;
+      }
+
+      // "Ver guía" del header
+      const verGuia = document.getElementById('verGuia');
+      if (verGuia) verGuia.addEventListener('click', () => {
+        if (typeof iniciarTourConfigurar === 'function') iniciarTourConfigurar(false);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "App Escolar",
+  "short_name": "Escolar",
+  "description": "Aplicación escolar para lista de alumnos, control de colectas, entrega de desayunos e historial.", 
+  "start_url": "index.html",
+  "scope": "./", 
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0d6efd",
+  "icons": [
+    {
+      "src": "img/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "img/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "img/maskable_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

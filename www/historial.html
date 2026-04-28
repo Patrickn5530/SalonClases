@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>App Escolar - Historial</title>
+
+  <!-- CSS locales -->
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <link rel="stylesheet" href="css/fontawesome-all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/introjs.min.css">
+
+  <style>
+    /* Ajuste para que el header fijo no tape el contenido */
+    main { padding-top: 1.5rem; }
+    /* El contenedor del reporte debe poder scroll si es necesario */
+    #reportePDF { max-height: calc(100vh - 220px); overflow: auto; }
+  </style>
+</head>
+<body>
+  <header class="fixed-top">
+    <img src="img/logoEdoMex2.jpg" alt="Gobierno del Estado de México" class="h-100" style="object-fit: cover; max-width: 150px;">
+    <div class="dropdown text-white">
+      <button class="btn btn-outline-secondary dropdown-toggle text-white" type="button" data-bs-toggle="dropdown">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="index.html">Lista</a></li>
+        <li><a class="dropdown-item" href="colectas.html">Colecta</a></li>
+        <li><a class="dropdown-item" href="desayunos.html">Desayunos</a></li>
+        <li><a class="dropdown-item bg-secondary text-white" href="historial.html">Historial</a></li>
+        <li><a class="dropdown-item" href="configurar.html">Configurar</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><button class="dropdown-item text-primary" id="verGuia">Ver guía</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="container my-4">
+    <h4 class="text-center text-white mb-4">Reporte de Desayunos</h4>
+    <div id="reportePDF" class="bg-white p-2 rounded shadow">
+      <!-- Aquí se mostrará el reporte en forma de hoja -->
+    </div>
+  </main>
+
+  <footer class="text-center text-white py-2" style="font-size: 0.8em;">
+    <p id="footerCiclo">Cargando ciclo escolar...</p>
+  </footer>
+
+  <!-- JS locales (librerías primero, luego script de la página) -->
+  <script src="js/bootstrap.bundle.min.js"></script>
+  <script src="js/sweetalert2.min.js"></script>
+  <script src="js/localforage.min.js"></script>
+  <script src="js/intro.min.js"></script>
+  <script src="js/html2pdf.bundle.min.js"></script>
+
+  <!-- tu lógica de historial -->
+  <script src="js/historial.js"></script>
+</body>
+</html>

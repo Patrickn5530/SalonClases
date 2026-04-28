@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>App Escolar</title>
+
+  <!-- CSS locales (offline) -->
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <link rel="stylesheet" href="css/fontawesome-all.min.css">
+  <link rel="stylesheet" href="css/introjs.min.css">
+  <link rel="stylesheet" href="css/sweetalert2.min.css"> <!-- opcional si la tienes -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d6efd">
+</head>
+<body>
+<div class="d-flex flex-column min-vh-100">
+  <header class="fixed-top">
+    <img src="img/logoEdoMex2.jpg" alt="Gobierno del Estado de México" class="h-100" style="object-fit: cover; max-width: 150px;">
+    <div class="dropdown text-white">
+      <button class="btn btn-outline-secondary dropdown-toggle text-white" type="button" data-bs-toggle="dropdown">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item bg-secondary text-white" href="index.html">Lista</a></li>
+        <li><a class="dropdown-item" href="colectas.html">Colecta</a></li>
+        <li><a class="dropdown-item" href="desayunos.html">Desayunos</a></li>
+        <li><a class="dropdown-item" href="historial.html">Historial</a></li>
+        <li><a class="dropdown-item" href="configurar.html">Configurar</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><button class="dropdown-item text-primary" id="verGuia">Ver guía</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="container my-3">
+    <button class="btn btn-primary btn-sm mb-2" id="btnAgregarAlumno">Agregar Alumno</button>
+    <div class="table-responsive table-scroll tabla-contenedor">
+      <table class="table table-bordered table-striped">
+        <thead class="sticky-top">
+          <tr>
+            <th>#</th>
+            <th class="text-truncate">A. Paterno</th>
+            <th class="text-truncate">A. Materno</th>
+            <th class="text-truncate">Nombre(s)</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-alumnos"></tbody>
+      </table><br>
+    </div>
+  </main>
+
+  <footer class="text-center text-white py-2" style="font-size: 0.8em;">
+    <p id="infoDocente">Cargando datos del docente...</p>
+  </footer>
+</div>
+
+<!-- SCRIPTS LOCALES (ordenados): dependencias primero -->
+<script src="js/sweetalert2.min.js"></script>
+<script src="js/localforage.min.js"></script>
+<script src="js/intro.min.js"></script>
+<script src="js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // ------------------ UTILIDADES ------------------
+  function capitalizar(texto) {
+    return texto
+      .toLowerCase()
+      .split(' ')
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ');
+  }
+
+  // ------------------ CARGA DE ALUMNOS ------------------
+  async function cargarAlumnos() {
+    let alumnos = await localforage.getItem('alumnos') || [];
+
+    // Ordenar por Apellido Paterno, Apellido Materno y Nombre
+    alumnos.sort((a, b) => {
+      const r = (a.apellidoPaterno || '').localeCompare(b.apellidoPaterno || '', 'es', { sensitivity: 'base' });
+      if (r !== 0) return r;
+      const r2 = (a.apellidoMaterno || '').localeCompare(b.apellidoMaterno || '', 'es', { sensitivity: 'base' });
+      if (r2 !== 0) return r2;
+      return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+    });
+
+    // Guardar ordenado en localforage (opcional)
+    await localforage.setItem('alumnos', alumnos);
+
+    const tbody = document.getElementById('tabla-alumnos');
+    tbody.innerHTML = '';
+
+    alumnos.forEach((alumno, index) => {
+      const fila = document.createElement('tr');
+      fila.setAttribute("data-index", index);
+      fila.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${alumno.apellidoPaterno || ''}</td>
+        <td>${alumno.apellidoMaterno || ''}</td>
+        <td>${alumno.nombre || ''}</td>
+        <td class="text-center">
+          <i class="fas fa-edit text-primary" title="Editar" onclick="editarAlumno(${index})"></i>
+          <i class="fas fa-trash-alt text-danger" title="Eliminar" onclick="eliminarAlumno(${index})"></i>
+        </td>
+      `;
+      tbody.appendChild(fila);
+    });
+
+    await actualizarFooter();
+    return alumnos.length > 0;
+  }
+
+  // ------------------ FOOTER ------------------
+  async function actualizarFooter() {
+    const datos = await localforage.getItem('configuracionDocente');
+    const footer = document.getElementById('infoDocente');
+    if (datos && datos.nombre && datos.grado && datos.grupo && datos.tratamiento) {
+      footer.textContent = `${datos.tratamiento}: ${datos.nombre} - ${datos.grado}° Grupo: ${datos.grupo}`;
+    } else {
+      footer.textContent = 'Sin datos del docente, agrégalos en la sección: Configurar';
+    }
+  }
+
+  // ------------------ CRUD ALUMNOS ------------------
+  async function agregarAlumno(datosDemo = null) {
+    if (datosDemo) {
+      let alumnos = await localforage.getItem('alumnos') || [];
+      alumnos.push(datosDemo);
+      await localforage.setItem('alumnos', alumnos);
+      await cargarAlumnos();
+      return true;
+    }
+
+    const { value: formValues } = await Swal.fire({
+      title: 'Agregar Alumno',
+      html:
+        '<input id="apellidoPaterno" class="swal2-input" placeholder="Apellido Paterno">' +
+        '<input id="apellidoMaterno" class="swal2-input" placeholder="Apellido Materno">' +
+        '<input id="nombre" class="swal2-input" placeholder="Nombre(s)">',
+      focusConfirm: false,
+      preConfirm: () => {
+        const apellidoPaterno = document.getElementById('apellidoPaterno').value.trim();
+        const apellidoMaterno = document.getElementById('apellidoMaterno').value.trim();
+        const nombre = document.getElementById('nombre').value.trim();
+        if (!apellidoPaterno || !apellidoMaterno || !nombre) {
+          Swal.showValidationMessage('Todos los campos son obligatorios');
+          return false;
+        }
+        return {
+          apellidoPaterno: capitalizar(apellidoPaterno),
+          apellidoMaterno: capitalizar(apellidoMaterno),
+          nombre: capitalizar(nombre)
+        };
+      }
+    });
+
+    if (formValues) {
+      let alumnos = await localforage.getItem('alumnos') || [];
+      alumnos.push(formValues);
+      await localforage.setItem('alumnos', alumnos);
+      await cargarAlumnos();
+      Swal.fire({ icon: 'success', title: '¡Alumno agregado!', timer: 2000, showConfirmButton: false });
+      return true;
+    }
+    return false;
+  }
+
+  async function eliminarAlumno(index) {
+    const alumnos = await localforage.getItem('alumnos') || [];
+    const alumno = alumnos[index];
+
+    Swal.fire({
+      title: '¿Eliminar alumno?',
+      text: `${alumno.apellidoPaterno || ''} ${alumno.apellidoMaterno || ''} ${alumno.nombre || ''}`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then(async (res) => {
+      if (res.isConfirmed) {
+        alumnos.splice(index, 1);
+        await localforage.setItem('alumnos', alumnos);
+        await cargarAlumnos();
+        Swal.fire({ icon: 'success', title: 'Eliminado', timer: 2000, showConfirmButton: false });
+      }
+    });
+  }
+
+  async function editarAlumno(index) {
+    let alumnos = await localforage.getItem('alumnos') || [];
+    const alumno = alumnos[index];
+    const { value: formValues } = await Swal.fire({
+      title: 'Editar Alumno',
+      html:
+        `<input id="apellidoPaterno" class="swal2-input" value="${alumno.apellidoPaterno || ''}">` +
+        `<input id="apellidoMaterno" class="swal2-input" value="${alumno.apellidoMaterno || ''}">` +
+        `<input id="nombre" class="swal2-input" value="${alumno.nombre || ''}">`,
+      focusConfirm: false,
+      preConfirm: () => {
+        const apellidoPaterno = document.getElementById('apellidoPaterno').value.trim();
+        const apellidoMaterno = document.getElementById('apellidoMaterno').value.trim();
+        const nombre = document.getElementById('nombre').value.trim();
+        if (!apellidoPaterno || !apellidoMaterno || !nombre) {
+          Swal.showValidationMessage('Todos los campos son obligatorios');
+          return false;
+        }
+        return {
+          apellidoPaterno: capitalizar(apellidoPaterno),
+          apellidoMaterno: capitalizar(apellidoMaterno),
+          nombre: capitalizar(nombre)
+        };
+      }
+    });
+
+    if (formValues) {
+      alumnos[index] = formValues;
+      await localforage.setItem('alumnos', alumnos);
+      await cargarAlumnos();
+      Swal.fire({ icon: 'success', title: '¡Alumno actualizado!', timer: 2000, showConfirmButton: false });
+    }
+  }
+
+  // ------------------ TOUR y utilidades (igual que antes) ------------------
+  function labelsTour() {
+    return {
+      nextLabel: 'Siguiente',
+      prevLabel: 'Anterior',
+      doneLabel: 'Finalizar',
+      skipLabel: 'Omitir',
+      showProgress: true,
+      exitOnOverlayClick: false,
+      exitOnEsc: false
+    };
+  }
+
+  async function iniciarTourInicial() {
+    const alumnos = await localforage.getItem('alumnos') || [];
+    if (alumnos.length > 0) { iniciarTourManual(); return; }
+
+    Swal.fire({
+      title: '¡Bienvenido!',
+      html: 'Bienvenido a la App Escolar.<br>Para iniciar agregaremos un alumno de ejemplo para mostrar las secciones.<br>Se eliminará al finalizar el recorrido para que no haya confusión.',
+      icon: 'info',
+      confirmButtonText: 'Entendido',
+      allowOutsideClick: false
+    }).then(() => {
+      const tour = introJs();
+      tour.setOptions({
+        steps: [
+          { element: 'header .dropdown-toggle', intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
+          { element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." }
+        ],
+        ...labelsTour()
+      });
+
+      tour.oncomplete(async () => {
+        await agregarAlumno({ apellidoPaterno: "Pérez", apellidoMaterno: "García", nombre: "Juan" });
+        setTimeout(() => continuarTour(true), 800);
+      });
+
+      tour.start();
+    });
+  }
+
+  async function iniciarTourManual() {
+    const alumnos = await localforage.getItem('alumnos') || [];
+
+    const pasosBase = [
+      { element: 'header .dropdown-toggle', intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
+      { element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." }
+    ];
+
+    if (alumnos.length === 0) {
+      const tour = introJs();
+      tour.setOptions({ steps: pasosBase, ...labelsTour() });
+
+      tour.onafterchange(function(targetElement) {
+        if (targetElement.id === 'btnAgregarAlumno') {
+          tour.exit();
+          Swal.fire({ icon: 'info', title: 'Agrega un alumno', text: 'Presiona "Agregar Alumno" para continuar.' });
+        }
+      });
+
+      tour.start();
+
+      document.getElementById('btnAgregarAlumno').addEventListener('click', async () => {
+        const agregado = await agregarAlumno();
+        if (agregado) setTimeout(() => continuarTour(false), 500);
+      }, { once: true });
+    } else {
+      continuarTour(false);
+    }
+  }
+
+  function continuarTour(esDemo) {
+    const pasos = [
+      { element: '#tabla-alumnos tr', intro: "Aquí se muestran los alumnos agregados, ordenados por apellidos." },
+      { element: '.fa-edit', intro: "Con este botón puedes editar la información del alumno." },
+      { element: '.fa-trash-alt', intro: "Con este botón puedes eliminar al alumno." },
+      { element: '#infoDocente', intro: "Aquí se muestra la información del docente que guardes en configurar." }
+    ];
+
+    const tour = introJs();
+    tour.setOptions({ steps: pasos, ...labelsTour() });
+    tour.start();
+
+    tour.oncomplete(async () => {
+      if (esDemo) {
+        let alumnos = await localforage.getItem('alumnos') || [];
+        alumnos = alumnos.filter(a => !(a.nombre === "Juan" && a.apellidoPaterno === "Pérez" && a.apellidoMaterno === "García"));
+        await localforage.setItem('alumnos', alumnos);
+        await cargarAlumnos();
+      }
+      preguntarContinuar();
+    });
+  }
+
+  function preguntarContinuar() {
+    Swal.fire({
+      title: '¿Continuar recorrido?',
+      text: '¿Quieres seguir con la siguiente sección (Colecta)?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí',
+      cancelButtonText: 'No'
+    }).then((res) => {
+      if (res.isConfirmed) {
+        localStorage.setItem('tourContinuar', 'colectas');
+        window.location.href = 'colectas.html';
+      }
+    });
+  }
+
+  // ------------------ EVENTOS ------------------
+  document.addEventListener('DOMContentLoaded', async () => {
+    await cargarAlumnos();
+
+    document.getElementById('btnAgregarAlumno').addEventListener('click', () => agregarAlumno());
+    document.getElementById('verGuia').addEventListener('click', () => iniciarTourManual());
+
+    if (!localStorage.getItem('tourIndexVisto')) {
+      localStorage.setItem('tourIndexVisto', true);
+      iniciarTourInicial();
+    }
+  });
+</script>
+
+<!-- Registro del Service Worker (lo dejo apuntando a sw.js en la raíz) -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('SW registrado, scope:', reg.scope))
+        .catch(err => console.warn('Error registrando SW:', err));
+    });
+  } else {
+    console.log('Service Worker no soportado en este navegador/WebView.');
+  }
+</script>
+</body>
+</html>
