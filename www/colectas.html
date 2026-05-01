@@ -15,7 +15,6 @@
     .tabla-scroll { overflow-x: auto; }
     .pago-completo { background-color: #d4edda !important; }
     .pago-parcial { background-color: #fff3cd !important; }
-    /* pequeño ajuste para que el footer no tape contenido cuando hay fixed-top */
     main { padding-top: 1rem; }
   </style>
 </head>
@@ -58,7 +57,6 @@
     <p id="infoDocente">Cargando datos del docente...</p>
   </footer>
 
-  <!-- JS locales (cargar al final) -->
   <script src="js/bootstrap.bundle.min.js"></script>
   <script src="js/sweetalert2.min.js"></script>
   <script src="js/localforage.min.js"></script>
@@ -85,7 +83,7 @@
     const info = document.getElementById('infoDocente');
     try {
       const datos = await localforage.getItem('configuracionDocente');
-      if (datos && datos.nombre && datos.grado && datos.grupo && datos.tratamiento) {
+      if (datos && datos.nombre) {
         info.textContent = `${datos.tratamiento}: ${datos.nombre} - ${datos.grado}° Grupo: ${datos.grupo}`;
       } else {
         info.textContent = 'Sin configuración de docente';
@@ -95,7 +93,7 @@
     }
   }
 
-  // --- CREAR COLECTA (botón) ---
+  // --- CREAR COLECTA ---
   document.getElementById('crearColectaBtn').addEventListener('click', () => {
     Swal.fire({
       icon: 'info', title: '¡Aviso!',
@@ -121,7 +119,6 @@
           return { titulo, monto, f1, f2 };
         },
         showCancelButton: true,
-        cancelButtonText: 'Cancelar',
         confirmButtonText: 'Crear'
       }).then(async res => {
         if (!res.isConfirmed) return;
@@ -131,7 +128,14 @@
           Swal.fire('Error', 'No hay alumnos registrados en la lista general.', 'error');
           return;
         }
-        const colecta = { titulo, monto, fechaInicio: f1, fechaLimite: f2, alumnos: alumnos.map(a => ({ ...a, entregado: 0 })) };
+        // Vinculamos por ID y aseguramos que todos tengan entregado 0
+        const colecta = { 
+          titulo, 
+          monto, 
+          fechaInicio: f1, 
+          fechaLimite: f2, 
+          alumnos: alumnos.map(a => ({ ...a, entregado: 0 })) 
+        };
         await localforage.setItem(titulo, colecta);
         Swal.fire('Colecta creada!', '', 'success');
         await cargarColectas();
@@ -141,7 +145,6 @@
     });
   });
 
-  // --- CARGAR SELECT ---
   async function cargarColectas() {
     const keys = await localforage.keys();
     const sel = document.getElementById('colectaSelect');
@@ -158,8 +161,8 @@
     }
   }
 
-  // --- MOSTRAR COLECTA Y ENLAZAR EVENTOS ---
   document.getElementById('colectaSelect').addEventListener('change', mostrarColectaSeleccionada);
+
   async function mostrarColectaSeleccionada() {
     const key = document.getElementById('colectaSelect').value;
     const cont = document.getElementById('tablaColecta');
@@ -168,22 +171,28 @@
     const c = await localforage.getItem(key);
     if (!c) return;
 
-    // construir filas
-    let total = 0;
+    let totalRecaudado = 0;
     const filas = (c.alumnos || []).map((a, i) => {
       const ent = Number(a.entregado || 0);
-      total += ent;
+      totalRecaudado += ent;
       const restante = (c.monto - ent).toFixed(2);
       const clase = ent >= c.monto ? 'pago-completo' : (ent > 0 ? 'pago-parcial' : '');
-      // Quitar botón (separa columna) y abonar
-      return `<tr class="${clase}">
-        <td style="width:50px">${i + 1}</td>
-        <td class="text-truncate">${a.apellidoPaterno} ${a.apellidoMaterno} ${a.nombre}</td>
-        <td class="text-end">${ent.toFixed(2)}</td>
-        <td class="text-end">${restante}</td>
-        <td class="text-center"><button class="btn btn-sm btn-success abonar-btn" style="font-size:0.8em;" data-i="${i}">Abonar</button></td>
-        <td class="text-center"><button class="btn btn-sm btn-danger quitar-btn" style="font-size:0.8em;" data-i="${i}"><i class="fas fa-trash-alt"></i></button></td>
-      </tr>`;
+      
+// Botones más compactos (padding reducido y letra más chica)
+return `<tr class="${clase}">
+  <td style="width:50px">${i + 1}</td>
+  <td class="text-truncate">${a.apellidoPaterno} ${a.apellidoMaterno} ${a.nombre}</td>
+  <td class="text-end">${ent.toFixed(2)}</td>
+  <td class="text-end">${restante}</td>
+  <td class="text-center">
+    <button class="btn btn-success abonar-btn" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" data-id="${a.id}">Abonar</button>
+  </td>
+  <td class="text-center">
+    <button class="btn btn-danger quitar-btn" style="padding: 0.1rem 0.4rem; font-size: 0.75rem;" data-id="${a.id}">
+      <i class="fas fa-trash-alt" style="font-size: 0.7rem;"></i>
+    </button>
+  </td>
+</tr>`;
     }).join('');
 
     cont.innerHTML = `
@@ -193,9 +202,9 @@
           <small>Inicio: ${formatearFecha(c.fechaInicio)} | Límite: ${formatearFecha(c.fechaLimite)}</small>
         </div>
         <div class="btn-group">
-          <button id="agregarAlumnoBtn" class="btn btn-success btn-sm" title="Agregar Alumno"><i class="fas fa-plus-circle"></i></button>
-          <button id="editarColectaBtn" class="btn btn-primary btn-sm" title="Editar colecta"><i class="fas fa-edit"></i></button>
-          <button id="borrarColectaBtn" class="btn btn-danger btn-sm" title="Eliminar colecta"><i class="fas fa-trash-alt"></i></button>
+          <button id="agregarAlumnoBtn" class="btn btn-success btn-sm"><i class="fas fa-plus-circle"></i></button>
+          <button id="editarColectaBtn" class="btn btn-primary btn-sm"><i class="fas fa-edit"></i></button>
+          <button id="borrarColectaBtn" class="btn btn-danger btn-sm"><i class="fas fa-trash-alt"></i></button>
         </div>
       </div>
       <div class="tabla-scroll">
@@ -205,223 +214,111 @@
           </thead>
           <tbody>${filas}</tbody>
           <tfoot>
-            <tr><td colspan="6"><strong>Meta: $${(c.monto * (c.alumnos?.length || 0)).toFixed(2)}</strong> &nbsp; | &nbsp; <strong class="text-success">Total Recaudado: $${total.toFixed(2)}</strong> &nbsp; | &nbsp; <strong class="text-danger">Faltante: $${(c.monto * (c.alumnos?.length || 0) - total).toFixed(2)}</strong></td></tr>
+            <tr><td colspan="6"><strong>Meta: $${(c.monto * (c.alumnos?.length || 0)).toFixed(2)}</strong> &nbsp; | &nbsp; <strong class="text-success">Total: $${totalRecaudado.toFixed(2)}</strong></td></tr>
           </tfoot>
         </table>
       </div>
     `;
 
-    // --- listeners ---
-    // Editar colecta
-    const editarBtn = document.getElementById('editarColectaBtn');
-    if (editarBtn) {
-      editarBtn.onclick = async () => {
+    // --- Listeners con lógica de IDs ---
+    document.getElementById('editarColectaBtn').onclick = async () => {
         Swal.fire({
           title: 'Editar Colecta',
-          html: `
-            <p><strong>Título:</strong> ${c.titulo}</p>
-            <input id="fechaInicioEdit" type="date" class="swal2-input" value="${c.fechaInicio}">
-            <input id="fechaLimiteEdit" type="date" class="swal2-input" value="${c.fechaLimite}">
-            <input id="montoEdit" type="number" class="swal2-input" value="${c.monto}">
-          `,
-          preConfirm: () => {
-            const f1 = document.getElementById('fechaInicioEdit').value;
-            const f2 = document.getElementById('fechaLimiteEdit').value;
-            const m = parseFloat(document.getElementById('montoEdit').value);
-            if (!f1 || !f2 || isNaN(m)) { Swal.showValidationMessage('Todos los campos deben ser válidos'); return false; }
-            return { f1, f2, m };
-          },
-          showCancelButton: true,
-          cancelButtonText: 'Cancelar',
-        }).then(async (res) => {
-          if (!res.isConfirmed) return;
-          c.fechaInicio = res.value.f1;
-          c.fechaLimite = res.value.f2;
-          c.monto = res.value.m;
-          await localforage.setItem(key, c);
-          mostrarColectaSeleccionada();
-          Swal.fire('Colecta actualizada','', 'success');
+          html: `<input id="f1" type="date" class="swal2-input" value="${c.fechaInicio}"><input id="f2" type="date" class="swal2-input" value="${c.fechaLimite}"><input id="m" type="number" class="swal2-input" value="${c.monto}">`,
+          preConfirm: () => ({ f1: document.getElementById('f1').value, f2: document.getElementById('f2').value, m: parseFloat(document.getElementById('m').value) })
+        }).then(async res => {
+          if(res.isConfirmed) {
+            Object.assign(c, { fechaInicio: res.value.f1, fechaLimite: res.value.f2, monto: res.value.m });
+            await localforage.setItem(key, c); mostrarColectaSeleccionada();
+          }
         });
-      };
-    }
+    };
 
-    // Borrar colecta
-    const borrarBtn = document.getElementById('borrarColectaBtn');
-    if (borrarBtn) {
-      borrarBtn.onclick = () => {
-        Swal.fire({
-          title: '¿Estás seguro?',
-          text: "Esta acción eliminará la colecta permanentemente.",
-          icon: 'warning',
-          showCancelButton: true,
-          cancelButtonText: 'Cancelar',
-          confirmButtonText: 'Sí, borrar'
-        }).then(async (r) => {
-          if (!r.isConfirmed) return;
-          await localforage.removeItem(key);
-          document.getElementById('tablaColecta').innerHTML = '';
-          await cargarColectas();
-          Swal.fire('Colecta eliminada','', 'success');
-        });
-      };
-    }
+    document.getElementById('borrarColectaBtn').onclick = () => {
+      Swal.fire({ title: '¿Borrar colecta?', icon: 'warning', showCancelButton: true }).then(async r => {
+        if(r.isConfirmed) { await localforage.removeItem(key); await cargarColectas(); cont.innerHTML = ''; }
+      });
+    };
 
-    // Abonar
     cont.querySelectorAll('.abonar-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const idx = Number(btn.getAttribute('data-i'));
-        const { value } = await Swal.fire({
-          title: 'Registrar abono',
-          input: 'number',
-          inputPlaceholder: 'Cantidad a abonar',
-          showCancelButton: true,
-          cancelButtonText: 'Cancelar',
-          confirmButtonText: 'Registrar',
-        });
-        if (value === undefined) return; // cancelado
-        const abono = parseFloat(value);
-        if (isNaN(abono) || abono <= 0) {
-          Swal.fire('Cantidad inválida','', 'error'); return;
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-id');
+        const { value } = await Swal.fire({ title: 'Abonar', input: 'number' });
+        if (value) {
+          const idx = c.alumnos.findIndex(a => a.id === id);
+          c.alumnos[idx].entregado = (Number(c.alumnos[idx].entregado) || 0) + parseFloat(value);
+          await localforage.setItem(key, c); mostrarColectaSeleccionada();
         }
-        c.alumnos[idx].entregado = (Number(c.alumnos[idx].entregado) || 0) + abono;
-        await localforage.setItem(key, c);
-        mostrarColectaSeleccionada();
-        Swal.fire('Abono registrado','', 'success');
-      });
-    });
-
-    // Quitar alumno (solo de esa colecta)
-    cont.querySelectorAll('.quitar-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const idx = Number(btn.getAttribute('data-i'));
-        Swal.fire({
-          title: '¿Quitar alumno?',
-          text: 'Se eliminará de esta colecta.',
-          icon: 'warning',
-          showCancelButton: true,
-          cancelButtonText: 'Cancelar',
-          confirmButtonText: 'Sí, quitar'
-        }).then(async (r) => {
-          if (!r.isConfirmed) return;
-          c.alumnos.splice(idx, 1);
-          await localforage.setItem(key, c);
-          mostrarColectaSeleccionada();
-          Swal.fire('Alumno quitado de la colecta','', 'success');
-        });
-      });
-    });
-
-    // Agregar alumno existente desde lista general
-    const agregarBtn = document.getElementById('agregarAlumnoBtn');
-    if (agregarBtn) {
-      agregarBtn.onclick = async () => {
-        const alumnosGenerales = await localforage.getItem('alumnos') || [];
-        if (!alumnosGenerales || alumnosGenerales.length === 0) {
-          Swal.fire('No hay alumnos disponibles en la lista general.', '', 'info'); return;
-        }
-        const disponibles = alumnosGenerales.filter(ag =>
-          !c.alumnos.some(ac =>
-            ac.nombre === ag.nombre &&
-            ac.apellidoPaterno === ag.apellidoPaterno &&
-            ac.apellidoMaterno === ag.apellidoMaterno
-          )
-        );
-        if (disponibles.length === 0) {
-          Swal.fire('Todos los alumnos ya están incluidos en esta colecta.', '', 'info'); return;
-        }
-        const opciones = disponibles.map((a, i) => `<option value="${i}">${a.apellidoPaterno} ${a.apellidoMaterno} ${a.nombre}</option>`).join('');
-        const { isConfirmed } = await Swal.fire({
-          title: 'Agregar Alumno a la Colecta',
-          html: `<select id="selectAlumno" class="swal2-input">${opciones}</select>`,
-          showCancelButton: true,
-          cancelButtonText: 'Cancelar',
-          confirmButtonText: 'Agregar'
-        });
-        if (!isConfirmed) return;
-        const idxSel = Number(document.getElementById('selectAlumno').value);
-        const alumnoSeleccionado = { ...disponibles[idxSel], entregado: 0 };
-        c.alumnos.push(alumnoSeleccionado);
-        await localforage.setItem(key, c);
-        mostrarColectaSeleccionada();
-        Swal.fire('Alumno agregado a la colecta','', 'success');
       };
-    }
+    });
+
+    cont.querySelectorAll('.quitar-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-id');
+        Swal.fire({ title: '¿Quitar de colecta?', showCancelButton: true }).then(async r => {
+          if(r.isConfirmed) {
+            c.alumnos = c.alumnos.filter(a => a.id !== id);
+            await localforage.setItem(key, c); mostrarColectaSeleccionada();
+          }
+        });
+      };
+    });
+
+    document.getElementById('agregarAlumnoBtn').onclick = async () => {
+      const generales = await localforage.getItem('alumnos') || [];
+      const disponibles = generales.filter(g => !c.alumnos.some(ca => ca.id === g.id));
+      if(!disponibles.length) return Swal.fire('Sin alumnos disponibles');
+      
+      const opciones = disponibles.map((a, i) => `<option value="${i}">${a.apellidoPaterno} ${a.nombre}</option>`).join('');
+      const { isConfirmed, value } = await Swal.fire({
+        title: 'Agregar Alumno',
+        html: `<select id="selAlu" class="swal2-input">${opciones}</select>`,
+        preConfirm: () => document.getElementById('selAlu').value,
+        showCancelButton: true
+      });
+      if(isConfirmed) {
+        c.alumnos.push({ ...disponibles[value], entregado: 0 });
+        await localforage.setItem(key, c); mostrarColectaSeleccionada();
+      }
+    };
   }
 
-  // --- TOUR ---
+// --- TOUR (ACTUALIZADO) ---
   async function iniciarTourInicial() {
     const keys = await localforage.keys();
     const colectas = keys.filter(k => !['alumnos','configuracionDocente','cicloEscolar'].includes(k));
-    if (colectas.length) { iniciarTourManual(); return; }
+    if (colectas.length) { await iniciarTourManual(); return; }
 
-    // Bienvenida + crear demo (si no hay alumnos, crear demo alumno primero)
     await Swal.fire({
       title: '¡Bienvenido!',
       html: 'Crearemos una <b>Colecta Demo</b> para mostrar cómo funciona esta sección. Se eliminará al terminar el recorrido.',
-      icon: 'info',
-      confirmButtonText: 'Entendido',
-      allowOutsideClick: false
+      icon: 'info', confirmButtonText: 'Entendido'
     });
 
     let alumnos = await localforage.getItem('alumnos') || [];
-
-    // Si no hay alumnos, crear alumno demo (marcado con __demo:true)
-    let demoAlumnoCreado = false;
     if (!alumnos.length) {
-      const demoAlumno = { apellidoPaterno: 'Pérez', apellidoMaterno: 'García', nombre: 'Juan', __demo: true };
-      alumnos = [demoAlumno];
+      alumnos = [{ id: 'demo-alu', apellidoPaterno: 'Pérez', apellidoMaterno: 'García', nombre: 'Juan', __demo: true }];
       await localforage.setItem('alumnos', alumnos);
-      demoAlumnoCreado = true;
     }
 
-    // Crear colecta demo
     const demoKey = 'Colecta Demo';
-    const demo = {
-      titulo: demoKey,
-      monto: 50,
-      fechaInicio: new Date().toISOString().slice(0,10),
-      fechaLimite: new Date().toISOString().slice(0,10),
+    await localforage.setItem(demoKey, {
+      titulo: demoKey, monto: 50, fechaInicio: new Date().toISOString().slice(0,10), fechaLimite: new Date().toISOString().slice(0,10),
       alumnos: alumnos.map(a => ({ ...a, entregado: 0 }))
-    };
+    });
 
-    await localforage.setItem(demoKey, demo);
     await cargarColectas();
     document.getElementById('colectaSelect').value = demoKey;
-    mostrarColectaSeleccionada();
+    await mostrarColectaSeleccionada();
     setTimeout(() => continuarTour(demoKey, true), 700);
   }
 
   async function iniciarTourManual() {
     const keys = await localforage.keys();
     const colectas = keys.filter(k => !['alumnos','configuracionDocente','cicloEscolar'].includes(k));
-    // Si no hay colectas, creamos demo (pero si no hay alumnos, creamos demo alumno también)
-    if (!colectas.length) {
-      let alumnos = await localforage.getItem('alumnos') || [];
-      let demoAlumnoCreado = false;
-      if (!alumnos.length) {
-        const demoAlumno = { apellidoPaterno: 'Pérez', apellidoMaterno: 'García', nombre: 'Juan', __demo: true };
-        alumnos = [demoAlumno];
-        await localforage.setItem('alumnos', alumnos);
-        demoAlumnoCreado = true;
-      }
-      const demoKey = 'Colecta Demo';
-      const demo = {
-        titulo: demoKey,
-        monto: 50,
-        fechaInicio: new Date().toISOString().slice(0,10),
-        fechaLimite: new Date().toISOString().slice(0,10),
-        alumnos: alumnos.map(a => ({ ...a, entregado: 0 }))
-      };
-      await localforage.setItem(demoKey, demo);
-      await cargarColectas();
-      document.getElementById('colectaSelect').value = demoKey;
-      mostrarColectaSeleccionada();
-      setTimeout(() => continuarTour(demoKey, true), 700);
-      return;
-    }
-    // si hay colectas, usar la primera
+    if (!colectas.length) { return await iniciarTourInicial(); }
     document.getElementById('colectaSelect').value = colectas[0];
-    mostrarColectaSeleccionada();
+    await mostrarColectaSeleccionada();
     setTimeout(() => continuarTour(colectas[0], false), 600);
   }
 
@@ -433,28 +330,23 @@
       { element: '#editarColectaBtn', intro: "Con este botón puedes editar fechas o monto de la colecta." },
       { element: '#borrarColectaBtn', intro: "Con este botón puedes eliminar una colecta. (Esto no se puede deshacer)" },
       { element: '#tablaAlumnosColecta tbody tr:first-child', intro: "Aquí se muestra la lista de alumnos, lo que han aportado y lo que les falta." },
-      { element: '.abonar-btn', intro: "Con este botón puedes agregar el dinero aportado." },
-      { element: '.fa-times', intro: "Con este botón puedes eliminar al alumno de la lista de esta colecta.<br>No se borrará de otras colectas o de la lista general." },
+      { element: document.querySelector('.abonar-btn'), intro: "Con este botón puedes agregar el dinero aportado." },
+      { element: document.querySelector('.quitar-btn'), intro: "Con este botón puedes eliminar al alumno de la lista de esta colecta.<br>No se borrará de otras colectas o de la lista general." },
       { element: '#infoDocente', intro: "Aquí se muestra la información del docente configurado." }
     ];
-    const tour = introJs();
+    
+    // CAMBIO: Usamos introJs.tour() para evitar la advertencia
+    const tour = introJs.tour();
     tour.setOptions({ steps: pasos, ...labelsTour() });
+    
     tour.oncomplete(async () => {
       if (isDemo) {
-        // eliminar demo colecta
-        const demo = await localforage.getItem(key);
-        if (demo && demo.titulo === key) {
-          await localforage.removeItem(key);
-          await cargarColectas();
-          document.getElementById('tablaColecta').innerHTML = '';
-        }
-        // eliminar alumnos demo (los que tengan __demo: true)
-        let alumnos = await localforage.getItem('alumnos') || [];
-        const anyDemo = alumnos.some(a => a.__demo);
-        if (anyDemo) {
-          alumnos = alumnos.filter(a => !a.__demo);
-          await localforage.setItem('alumnos', alumnos);
-        }
+        await localforage.removeItem(key);
+        let alus = await localforage.getItem('alumnos') || [];
+        await localforage.setItem('alumnos', alus.filter(a => !a.__demo));
+        await cargarColectas(); 
+        const cont = document.getElementById('tablaColecta');
+        if(cont) cont.innerHTML = '';
       }
       preguntarContinuar();
     });
@@ -467,8 +359,8 @@
       text: '¿Quieres seguir con la siguiente sección (Desayunos)?',
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Sí',
-      cancelButtonText: 'No'
+      cancelButtonText: 'No',
+      confirmButtonText: 'Sí'
     }).then((res) => {
       if (res.isConfirmed) {
         localStorage.setItem('tourContinuar', 'desayunos');
@@ -477,17 +369,22 @@
     });
   }
 
-  // --- INIT ---
+  // --- INIT (OPTIMIZADO PARA EVITAR ERROR DE LISTENER) ---
   document.addEventListener('DOMContentLoaded', async () => {
-    await actualizarFooter();
-    await cargarColectas();
+    try {
+      await actualizarFooter();
+      await cargarColectas();
+      
+      const btnGuia = document.getElementById('verGuia');
+      if(btnGuia) btnGuia.onclick = iniciarTourManual;
 
-    document.getElementById('verGuia').addEventListener('click', iniciarTourManual);
-
-    // Si venimos desde el index con la intención de continuar el tour
-    if (localStorage.getItem('tourContinuar') === 'colectas') {
-      localStorage.removeItem('tourContinuar');
-      iniciarTourInicial();
+      if (localStorage.getItem('tourContinuar') === 'colectas') {
+        localStorage.removeItem('tourContinuar');
+        // Pequeño delay para asegurar que el canal de mensajes esté listo
+        setTimeout(() => iniciarTourInicial(), 500);
+      }
+    } catch (error) {
+      console.error("Error en la carga inicial:", error);
     }
   });
 </script>
