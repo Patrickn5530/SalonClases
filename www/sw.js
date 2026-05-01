@@ -2,11 +2,11 @@
 // Service Worker - App Escolar
 // ===============================
 
-// Nota: versión bumpada para forzar instalación inicial limpia
-const CACHE_NAME = 'app-escolar-v2.5.0';
-const RUNTIME = 'runtime-cache-2.5.0';
+const CACHE_NAME = 'app-escolar-v2.5.1';
 
-const PRECACHE_URLS = [
+// Cambiamos el nombre a FILES_TO_CACHE para que coincida con la función de abajo
+const FILES_TO_CACHE = [
+  './',
   'index.html',
   'colectas.html',
   'configurar.html',
@@ -22,9 +22,9 @@ const PRECACHE_URLS = [
 
   // JS
   'js/configurar.js',
-  'js/colectas.js',
   'js/desayunos.js',
   'js/historial.js',
+  'js/html2pdf.bundle.min.js',
   'js/localforage.min.js',
   'js/sweetalert2.min.js',
   'js/intro.min.js',
@@ -46,10 +46,15 @@ const PRECACHE_URLS = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(FILES_TO_CACHE);
+      // Intentamos cargar los archivos uno por uno para que no rompa todo
+      return Promise.all(
+        FILES_TO_CACHE.map(url => {
+          return cache.add(url).catch(err => console.warn(`No se pudo cargar en caché: ${url}`, err));
+        })
+      );
     })
   );
-  self.skipWaiting(); // 🔹 activa inmediatamente
+  self.skipWaiting();
 });
 
 // ===============================

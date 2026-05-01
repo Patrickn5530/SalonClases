@@ -274,7 +274,7 @@ async function cargarAlumnos() {
       confirmButtonText: 'Entendido',
       allowOutsideClick: false
     }).then(() => {
-      const tour = introJs();
+      const tour = introJs.tour();
       tour.setOptions({
         steps: [
           { 
@@ -302,7 +302,7 @@ async function cargarAlumnos() {
   async function iniciarTourManual() {
     const alumnos = await localforage.getItem('alumnos') || [];
     if (alumnos.length === 0) {
-      const tour = introJs();
+      const tour = introJs.tour();
       tour.setOptions({
         steps: [
           { element: document.querySelector('.dropdown-toggle'), intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
@@ -326,6 +326,10 @@ async function cargarAlumnos() {
   function continuarTour(esDemo) {
     const pasos = [
       { 
+        element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." 
+
+      },
+      { 
         element: document.querySelector('#tabla-alumnos tr'), 
         intro: "Aquí se muestran los alumnos agregados, ordenados por apellidos." 
       },
@@ -343,7 +347,7 @@ async function cargarAlumnos() {
       }
     ];
 
-    const tour = introJs();
+    const tour = introJs.tour();
     tour.setOptions({ steps: pasos, ...labelsTour() });
 
     tour.oncomplete(async () => {
@@ -355,7 +359,6 @@ async function cargarAlumnos() {
     tour.start();
   }
 
-  // RECUERDA AGREGAR ESTA FUNCIÓN AL FINAL DE TU SCRIPT PARA QUE NO DE ERROR
   function preguntarContinuar() {
     Swal.fire({
       title: '¿Continuar recorrido?',
