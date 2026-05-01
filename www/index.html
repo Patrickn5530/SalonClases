@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="css/bootstrap.min.css">
   <link rel="stylesheet" href="css/fontawesome-all.min.css">
   <link rel="stylesheet" href="css/introjs.min.css">
-  <link rel="stylesheet" href="css/sweetalert2.min.css"> <!-- opcional si la tienes -->
+  <link rel="stylesheet" href="css/sweetalert2.min.css">
   <link rel="stylesheet" href="css/styles.css">
 
   <link rel="manifest" href="manifest.json">
@@ -58,7 +58,6 @@
   </footer>
 </div>
 
-<!-- SCRIPTS LOCALES (ordenados): dependencias primero -->
 <script src="js/sweetalert2.min.js"></script>
 <script src="js/localforage.min.js"></script>
 <script src="js/intro.min.js"></script>
@@ -67,51 +66,61 @@
 <script>
   // ------------------ UTILIDADES ------------------
   function capitalizar(texto) {
-    return texto
-      .toLowerCase()
-      .split(' ')
-      .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-      .join(' ');
+    return texto.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   }
 
-  // ------------------ CARGA DE ALUMNOS ------------------
-  async function cargarAlumnos() {
-    let alumnos = await localforage.getItem('alumnos') || [];
+// ------------------ CARGA DE ALUMNOS CON MIGRACIÓN ------------------
+async function cargarAlumnos() {
+  let alumnos = await localforage.getItem('alumnos') || [];
+  let huboCambios = false;
 
-    // Ordenar por Apellido Paterno, Apellido Materno y Nombre
-    alumnos.sort((a, b) => {
-      const r = (a.apellidoPaterno || '').localeCompare(b.apellidoPaterno || '', 'es', { sensitivity: 'base' });
-      if (r !== 0) return r;
-      const r2 = (a.apellidoMaterno || '').localeCompare(b.apellidoMaterno || '', 'es', { sensitivity: 'base' });
-      if (r2 !== 0) return r2;
-      return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
-    });
+  // SCRIPT DE MIGRACIÓN: Validar que todos tengan ID
+  alumnos = alumnos.map((alumno, index) => {
+    if (!alumno.id) {
+      // Si no tiene ID, le generamos uno basado en el tiempo + su posición
+      alumno.id = 'alu-' + (Date.now() + index); 
+      huboCambios = true;
+    }
+    return alumno;
+  });
 
-    // Guardar ordenado en localforage (opcional)
+  // Si se generaron IDs nuevos, guardamos la lista permanentemente
+  if (huboCambios) {
     await localforage.setItem('alumnos', alumnos);
-
-    const tbody = document.getElementById('tabla-alumnos');
-    tbody.innerHTML = '';
-
-    alumnos.forEach((alumno, index) => {
-      const fila = document.createElement('tr');
-      fila.setAttribute("data-index", index);
-      fila.innerHTML = `
-        <td>${index + 1}</td>
-        <td>${alumno.apellidoPaterno || ''}</td>
-        <td>${alumno.apellidoMaterno || ''}</td>
-        <td>${alumno.nombre || ''}</td>
-        <td class="text-center">
-          <i class="fas fa-edit text-primary" title="Editar" onclick="editarAlumno(${index})"></i>
-          <i class="fas fa-trash-alt text-danger" title="Eliminar" onclick="eliminarAlumno(${index})"></i>
-        </td>
-      `;
-      tbody.appendChild(fila);
-    });
-
-    await actualizarFooter();
-    return alumnos.length > 0;
+    console.log("Migración completada: Se asignaron IDs a los registros antiguos.");
   }
+
+  // Ordenar por Apellido Paterno, Apellido Materno y Nombre
+  alumnos.sort((a, b) => {
+    const r = (a.apellidoPaterno || '').localeCompare(b.apellidoPaterno || '', 'es', { sensitivity: 'base' });
+    if (r !== 0) return r;
+    const r2 = (a.apellidoMaterno || '').localeCompare(b.apellidoMaterno || '', 'es', { sensitivity: 'base' });
+    if (r2 !== 0) return r2;
+    return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+  });
+
+  const tbody = document.getElementById('tabla-alumnos');
+  tbody.innerHTML = '';
+
+  alumnos.forEach((alumno, index) => {
+    const fila = document.createElement('tr');
+    // Usamos el ID para las funciones de edición y borrado
+    fila.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${alumno.apellidoPaterno || ''}</td>
+      <td>${alumno.apellidoMaterno || ''}</td>
+      <td>${alumno.nombre || ''}</td>
+      <td class="text-center">
+        <i class="fas fa-edit text-primary me-2" title="Editar" onclick="editarAlumno('${alumno.id}')" style="cursor:pointer"></i>
+        <i class="fas fa-trash-alt text-danger" title="Eliminar" onclick="eliminarAlumno('${alumno.id}')" style="cursor:pointer"></i>
+      </td>
+    `;
+    tbody.appendChild(fila);
+  });
+
+  await actualizarFooter();
+  return alumnos.length > 0;
+}
 
   // ------------------ FOOTER ------------------
   async function actualizarFooter() {
@@ -126,8 +135,11 @@
 
   // ------------------ CRUD ALUMNOS ------------------
   async function agregarAlumno(datosDemo = null) {
+    let alumnos = await localforage.getItem('alumnos') || [];
+    
     if (datosDemo) {
-      let alumnos = await localforage.getItem('alumnos') || [];
+      // Si es demo y no tiene ID, le asignamos uno especial
+      if(!datosDemo.id) datosDemo.id = 'demo-' + Date.now();
       alumnos.push(datosDemo);
       await localforage.setItem('alumnos', alumnos);
       await cargarAlumnos();
@@ -150,6 +162,7 @@
           return false;
         }
         return {
+          id: 'alu-' + Date.now(), // CREACIÓN DE ID ÚNICO
           apellidoPaterno: capitalizar(apellidoPaterno),
           apellidoMaterno: capitalizar(apellidoMaterno),
           nombre: capitalizar(nombre)
@@ -158,7 +171,6 @@
     });
 
     if (formValues) {
-      let alumnos = await localforage.getItem('alumnos') || [];
       alumnos.push(formValues);
       await localforage.setItem('alumnos', alumnos);
       await cargarAlumnos();
@@ -168,9 +180,11 @@
     return false;
   }
 
-  async function eliminarAlumno(index) {
-    const alumnos = await localforage.getItem('alumnos') || [];
-    const alumno = alumnos[index];
+  async function eliminarAlumno(id) {
+    let alumnos = await localforage.getItem('alumnos') || [];
+    // Cambio: Buscar por ID
+    const alumno = alumnos.find(a => a.id === id);
+    if(!alumno) return;
 
     Swal.fire({
       title: '¿Eliminar alumno?',
@@ -181,7 +195,8 @@
       cancelButtonText: 'Cancelar'
     }).then(async (res) => {
       if (res.isConfirmed) {
-        alumnos.splice(index, 1);
+        // Cambio: Filtrar para eliminar por ID
+        alumnos = alumnos.filter(a => a.id !== id);
         await localforage.setItem('alumnos', alumnos);
         await cargarAlumnos();
         Swal.fire({ icon: 'success', title: 'Eliminado', timer: 2000, showConfirmButton: false });
@@ -189,8 +204,12 @@
     });
   }
 
-  async function editarAlumno(index) {
+  async function editarAlumno(id) {
     let alumnos = await localforage.getItem('alumnos') || [];
+    // Cambio: Buscar el índice por ID
+    const index = alumnos.findIndex(a => a.id === id);
+    if(index === -1) return;
+    
     const alumno = alumnos[index];
     const { value: formValues } = await Swal.fire({
       title: 'Editar Alumno',
@@ -208,6 +227,7 @@
           return false;
         }
         return {
+          id: id, // Mantenemos el mismo ID
           apellidoPaterno: capitalizar(apellidoPaterno),
           apellidoMaterno: capitalizar(apellidoMaterno),
           nombre: capitalizar(nombre)
@@ -223,7 +243,7 @@
     }
   }
 
-  // ------------------ TOUR y utilidades (igual que antes) ------------------
+  // ------------------ TOUR y utilidades ------------------
   function labelsTour() {
     return {
       nextLabel: 'Siguiente',
@@ -257,7 +277,8 @@
       });
 
       tour.oncomplete(async () => {
-        await agregarAlumno({ apellidoPaterno: "Pérez", apellidoMaterno: "García", nombre: "Juan" });
+        // Le damos un ID manual al demo para que sea fácil borrarlo
+        await agregarAlumno({ id: 'demo-juan', apellidoPaterno: "Pérez", apellidoMaterno: "García", nombre: "Juan" });
         setTimeout(() => continuarTour(true), 800);
       });
 
@@ -267,29 +288,17 @@
 
   async function iniciarTourManual() {
     const alumnos = await localforage.getItem('alumnos') || [];
-
-    const pasosBase = [
-      { element: 'header .dropdown-toggle', intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
-      { element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." }
-    ];
-
     if (alumnos.length === 0) {
+      // Lógica simplificada: si no hay alumnos, invitamos a agregar uno
       const tour = introJs();
-      tour.setOptions({ steps: pasosBase, ...labelsTour() });
-
-      tour.onafterchange(function(targetElement) {
-        if (targetElement.id === 'btnAgregarAlumno') {
-          tour.exit();
-          Swal.fire({ icon: 'info', title: 'Agrega un alumno', text: 'Presiona "Agregar Alumno" para continuar.' });
-        }
+      tour.setOptions({
+        steps: [
+          { element: 'header .dropdown-toggle', intro: "Menú principal." },
+          { element: '#btnAgregarAlumno', intro: "Presiona para agregar tu primer alumno." }
+        ],
+        ...labelsTour()
       });
-
       tour.start();
-
-      document.getElementById('btnAgregarAlumno').addEventListener('click', async () => {
-        const agregado = await agregarAlumno();
-        if (agregado) setTimeout(() => continuarTour(false), 500);
-      }, { once: true });
     } else {
       continuarTour(false);
     }
@@ -300,7 +309,7 @@
       { element: '#tabla-alumnos tr', intro: "Aquí se muestran los alumnos agregados, ordenados por apellidos." },
       { element: '.fa-edit', intro: "Con este botón puedes editar la información del alumno." },
       { element: '.fa-trash-alt', intro: "Con este botón puedes eliminar al alumno." },
-      { element: '#infoDocente', intro: "Aquí se muestra la información del docente que guardes en configurar." }
+      { element: '#infoDocente', intro: "Información del docente." }
     ];
 
     const tour = introJs();
@@ -310,7 +319,8 @@
     tour.oncomplete(async () => {
       if (esDemo) {
         let alumnos = await localforage.getItem('alumnos') || [];
-        alumnos = alumnos.filter(a => !(a.nombre === "Juan" && a.apellidoPaterno === "Pérez" && a.apellidoMaterno === "García"));
+        // Cambio: Borrar por ID el demo
+        alumnos = alumnos.filter(a => a.id !== 'demo-juan');
         await localforage.setItem('alumnos', alumnos);
         await cargarAlumnos();
       }
@@ -346,19 +356,6 @@
       iniciarTourInicial();
     }
   });
-</script>
-
-<!-- Registro del Service Worker (lo dejo apuntando a sw.js en la raíz) -->
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('SW registrado, scope:', reg.scope))
-        .catch(err => console.warn('Error registrando SW:', err));
-    });
-  } else {
-    console.log('Service Worker no soportado en este navegador/WebView.');
-  }
 </script>
 </body>
 </html>
