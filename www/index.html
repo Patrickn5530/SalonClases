@@ -243,7 +243,7 @@ async function cargarAlumnos() {
     }
   }
 
-  // ------------------ TOUR y utilidades ------------------
+// ------------------ TOURS (CON TUS TEXTOS ORIGINALES) ------------------
   function labelsTour() {
     return {
       nextLabel: 'Siguiente',
@@ -254,6 +254,13 @@ async function cargarAlumnos() {
       exitOnOverlayClick: false,
       exitOnEsc: false
     };
+  }
+
+  async function limpiarDemo() {
+    let alumnos = await localforage.getItem('alumnos') || [];
+    alumnos = alumnos.filter(a => a.id !== 'demo-juan');
+    await localforage.setItem('alumnos', alumnos);
+    await cargarAlumnos();
   }
 
   async function iniciarTourInicial() {
@@ -270,18 +277,24 @@ async function cargarAlumnos() {
       const tour = introJs();
       tour.setOptions({
         steps: [
-          { element: 'header .dropdown-toggle', intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
-          { element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." }
+          { 
+            element: document.querySelector('.dropdown-toggle'), 
+            intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." 
+          },
+          { 
+            element: '#btnAgregarAlumno', 
+            intro: "Con este botón puedes agregar un alumno a la lista." 
+          }
         ],
         ...labelsTour()
       });
 
       tour.oncomplete(async () => {
-        // Le damos un ID manual al demo para que sea fácil borrarlo
         await agregarAlumno({ id: 'demo-juan', apellidoPaterno: "Pérez", apellidoMaterno: "García", nombre: "Juan" });
         setTimeout(() => continuarTour(true), 800);
       });
-
+      
+      tour.onexit(limpiarDemo);
       tour.start();
     });
   }
@@ -289,14 +302,20 @@ async function cargarAlumnos() {
   async function iniciarTourManual() {
     const alumnos = await localforage.getItem('alumnos') || [];
     if (alumnos.length === 0) {
-      // Lógica simplificada: si no hay alumnos, invitamos a agregar uno
       const tour = introJs();
       tour.setOptions({
         steps: [
-          { element: 'header .dropdown-toggle', intro: "Menú principal." },
-          { element: '#btnAgregarAlumno', intro: "Presiona para agregar tu primer alumno." }
+          { element: document.querySelector('.dropdown-toggle'), intro: "En este menú puedes acceder a las diferentes páginas: Colectas, Desayunos, Historial, Configurar. <br>También podrás repetir el tour en <b>Ver Guía</b>." },
+          { element: '#btnAgregarAlumno', intro: "Con este botón puedes agregar un alumno a la lista." }
         ],
         ...labelsTour()
+      });
+
+      tour.onafterchange(function(targetElement) {
+        if (targetElement.id === 'btnAgregarAlumno') {
+          tour.exit();
+          Swal.fire({ icon: 'info', title: 'Agrega un alumno', text: 'Presiona "Agregar Alumno" para continuar.' });
+        }
       });
       tour.start();
     } else {
@@ -306,28 +325,37 @@ async function cargarAlumnos() {
 
   function continuarTour(esDemo) {
     const pasos = [
-      { element: '#tabla-alumnos tr', intro: "Aquí se muestran los alumnos agregados, ordenados por apellidos." },
-      { element: '.fa-edit', intro: "Con este botón puedes editar la información del alumno." },
-      { element: '.fa-trash-alt', intro: "Con este botón puedes eliminar al alumno." },
-      { element: '#infoDocente', intro: "Información del docente." }
+      { 
+        element: document.querySelector('#tabla-alumnos tr'), 
+        intro: "Aquí se muestran los alumnos agregados, ordenados por apellidos." 
+      },
+      { 
+        element: document.querySelector('#tabla-alumnos tr .fa-edit'), 
+        intro: "Con este botón puedes editar la información del alumno." 
+      },
+      { 
+        element: document.querySelector('#tabla-alumnos tr .fa-trash-alt'), 
+        intro: "Con este botón puedes eliminar al alumno." 
+      },
+      { 
+        element: '#infoDocente', 
+        intro: "Aquí se muestra la información del docente que guardes en configurar." 
+      }
     ];
 
     const tour = introJs();
     tour.setOptions({ steps: pasos, ...labelsTour() });
-    tour.start();
 
     tour.oncomplete(async () => {
-      if (esDemo) {
-        let alumnos = await localforage.getItem('alumnos') || [];
-        // Cambio: Borrar por ID el demo
-        alumnos = alumnos.filter(a => a.id !== 'demo-juan');
-        await localforage.setItem('alumnos', alumnos);
-        await cargarAlumnos();
-      }
-      preguntarContinuar();
+      if (esDemo) await limpiarDemo();
+      preguntarContinuar(); // Esta función se define abajo
     });
+
+    tour.onexit(async () => { if (esDemo) await limpiarDemo(); });
+    tour.start();
   }
 
+  // RECUERDA AGREGAR ESTA FUNCIÓN AL FINAL DE TU SCRIPT PARA QUE NO DE ERROR
   function preguntarContinuar() {
     Swal.fire({
       title: '¿Continuar recorrido?',
